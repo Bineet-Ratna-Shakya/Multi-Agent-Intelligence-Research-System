@@ -1,0 +1,35 @@
+{
+  "metadata": {
+    "query": "Notion AI",
+    "product_category": "ai_productivity",
+    "category_name": "AI Productivity Tools",
+    "generated_at": "2025-07-24T21:33:44.662735",
+    "total_sources": 4,
+    "verified_updates": 3
+  },
+  "updates": [
+    {
+      "product": "Notion Ai 2025",
+      "summary": "Notion Ai 2025: Free tier now includes 50 AI actions/month (up from 20) New “AI Power Hours” feature in Business plan Enterprise gets custom AI model training Notion AI vs. ChatGPT-5 Tome AI Motion AI Native Workspace. Real-Time Collaboration. Data Integration.",
+      "source": "https://blog.dalyaitools.com/ai-tool-reviews/notion-ai-review/",
+      "date": "2025-06-05"
+    },
+    {
+      "product": "Notion Ai 2025",
+      "summary": "Key innovations in Notion AI 2025 include: Intelligent project management automation, real-time collaborative workflows and Predictive task scheduling. These features represent a significant leap forward in workplace productivity tools, moving beyond basic organization to deliver intelligent, context-aware solutions that adapt to each team's unique needs.",
+      "source": "https://www.linkedin.com/pulse/notion-ai-2025-game-changing-features-transform-nantha-kumar-l-jm8ac",
+      "date": "2025-01-01"
+    },
+    {
+      "product": "Notion Calendar",
+      "summary": "Notion Calendar: Notion 2.51: AI Meeting Notes, Enterprise Search & more. Follow @NotionHQ May 13, 2025. Notion AI will look across Microsoft (Teams, SharePoint, OneDrive), with Gmail and Linear rolling out in the coming weeks and Zendesk, Salesforce, and Box in alphas soon.",
+      "source": "https://www.notion.com/releases/2025-05-13",
+      "date": "2025-05-13"
+    }
+  ],
+  "summary": {
+    "total_updates_found": 3,
+    "products_mentioned": 2,
+    "recent_updates": 3
+  }
+}

@@ -1,0 +1,5 @@
+2025-07-24 21:32:53,361 - Main - INFO - Starting Multi-Agent Competitive Intelligence System
+2025-07-24 21:32:53,363 - Main - INFO - Query: Notion AI
+2025-07-24 21:32:53,363 - Main - INFO - Category: ai_productivity
+2025-07-24 21:32:57,728 - Main - INFO - Executing competitive intelligence pipeline...
+2025-07-24 21:33:44,670 - Main - INFO - Pipeline completed successfully. Report saved to: reports/competitive_intelligence_Notion_AI_20250724_213344.json
