@@ -1,5 +1,5 @@
 # Multi-Agent-Intelligence-Research-System
-# A Python-based multi-agent framework for automated competitive intelligence and product update reporting. The system orchestrates agents to search, summarize and verify information on the latest product developments across categories.
+### A Python-based multi-agent framework for automated competitive intelligence and product update reporting. The system orchestrates agents to search, summarize and verify information on the latest product developments across categories.
 
 ## Project Workflow
 The system follows these detailed steps and components:
@@ -37,22 +37,6 @@ The system follows these detailed steps and components:
    - Aggregated into final JSON report with timestamp (`datetime.now()`) and saved under `reports/`.
    - In Streamlit UI, results rendered via `streamlit` components.
 
-## Table of Contents
-- [Features](#features)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Usage](#usage)
-  - [Command-line Interface](#command-line-interface)
-  - [Web Interface (Streamlit)](#web-interface-streamlit)
-- [Project Structure](#project-structure)
-- [Agents](#agents)
-- [Tools](#tools)
-- [Utilities](#utilities)
-- [Requirements](#requirements)
-- [Contributing](#contributing)
-- [License](#license)
-
 ## Features
 - Modular agents for search, summarization, and verification
 - Caching and memory support to optimize repeated queries
@@ -63,6 +47,13 @@ The system follows these detailed steps and components:
 - Python 3.8 or higher
 - Git
 - (Optional) Virtual environment tool (venv, conda)
+
+## Technical Tools Used
+- Language: Python 3.8+
+- Frameworks: Streamlit (UI), Playwright (browser automation)
+- APIs/Tools: DuckDuckGo Search, Requests, BeautifulSoup, PyPDF2
+- Embedding: N/A (no vector embedding component)
+- LLMs: facebook/bart-large-cnn (summarization), distilgpt2 (verification text generation)
 
 ## Installation
 1. Clone the repository:
@@ -149,26 +140,36 @@ scripts_README.md
 - **Logger**: Configurable logging to console and file.
 - **Memory**: In-memory caching of interactions and results.
 
-## Requirements
 
-Install dependencies using:
-```powershell
-pip install -r requirements.txt
-```
+## Architecture & Agent Design
+The system is organized into the following components:
 
-Core dependencies:
-- requests
-- PyPDF2
-- duckduckgo_search
-- playwright
-- beautifulsoup4
-- newspaper3k
-- transformers
-- torch
-- streamlit
-- python-dotenv
+- **Entry Points**
+  - `main.py`: Command-line interface for automated research tasks
+  - `app.py`: Streamlit-based web application for interactive use
 
+- **Configuration**
+  - `config.py`: Loads environment variables and defines global settings
 
+- **Utilities**
+  - `utils.logger`: Sets up structured logging
+  - `utils.memory`: Provides in-memory caching and session state
 
+- **Tools**
+  - `tools/search_tool.py`: Implements web, news, blog, and PDF search using external libraries
+    - Uses `duckduckgo_search`, `requests`, `BeautifulSoup`, `playwright`, and `PyPDF2`
 
+- **Agents**
+  - `agents/base_agent.py`: Abstract base class with logging and memory support
+  - `agents/coordinator_agent.py`: Orchestrates the pipeline and aggregates results
+  - `agents/search_agent.py`: Enhances and delegates search queries to the SearchTool
+  - `agents/summarizer_agent.py`: Summarizes text using a transformer model
+  - `agents/verifier_agent.py`: Verifies content using a text-generation LLM and zero-shot classification
 
+## Known Limitations & TODO
+- Add unit and integration tests for each agent and tool module
+- Improve error handling and retry strategies for network operations
+- Support additional search sources (APIs, databases, etc.)
+- Allow configurable output formats (CSV, HTML, etc.)
+- Implement authentication for protected or rate-limited APIs
+- Guardrails for Hallucinations
