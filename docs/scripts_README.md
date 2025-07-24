@@ -39,19 +39,12 @@ Each agent inherits from `BaseAgent` and implements `execute(task)`.
 - Applies relevance scoring and caching via memory.
 - Returns a structured result dict.
 
-**Key Methods:**
-- `execute(task)` – Main entry; logs, checks cache, runs search, filters results.
-- `_enhance_query(query, category)` – Augments query with category-specific terms.
-- `_filter_results(results, category)` – Scores and ranks raw extractions.
-
-
----
 
 ## 4. Search Tool (Folder: `tools/`)
 ### 4.1 `search_tool.py`
 **Responsibilities:**
 - Interfaces with DuckDuckGo (via `duckduckgo_search`) and HTTP/Playwright pipelines.
-- Performs three-tiered web search: general, news, and blogs.
+- three-tiered web search: general, news, and blogs.
 - Ensures source diversity and filters duplicates.
 - Extracts textual content via:
   - Direct HTTP requests + BeautifulSoup
@@ -59,21 +52,48 @@ Each agent inherits from `BaseAgent` and implements `execute(task)`.
   - PDF parsing (PyPDF2)
   - Headless browser scraping (Playwright)
 
-**Key Functions:**
-- `search_and_extract(query, max_results)` – Orchestrates search & content extraction.
-- `search_web(query, max_results)` – Returns raw search hits.
-- `extract_simple_requests(url)`, `extract_with_newspaper(url)`, `extract_pdf_content(url)`, `extract_content(url)` – Content extraction.
 
 **Dependencies:**
-- `duckduckgo_search`
-- `playwright`
-- `beautifulsoup4`
-- `PyPDF2`
-- `newspaper3k`
 
 ---
 
 ## 5. Additional Agents
+
+### 5.1 `base_agent.py`
+**Location:** `agents/base_agent.py`
+
+**Purpose:**
+- Defines `BaseAgent` abstract class with core functionality:
+  - Initialization with name, logger, and memory.
+
+
+
+### 5.2 `coordinator_agent.py`
+**Location:** `agents/coordinator_agent.py`
+
+**Purpose:**
+- Orchestrates the workflow across agents.
+- Loads configuration and initializes individual agents.
+- Dispatches tasks to `SearchAgent`, `SummarizerAgent`, and `VerifierAgent`.
+
+
+### 5.3 `summarizer_agent.py`
+**Location:** `agents/summarizer_agent.py`
+
+**Purpose:**
+- Uses a transformer-based model (e.g., BART) to condense content.
+- Caches summaries in memory to avoid reprocessing.
+- Extracts dates and product names, cleans summary text.
+
+
+### 5.4 `verifier_agent.py`
+**Location:** `agents/verifier_agent.py`
+
+**Purpose:**
+- Validates the accuracy and consistency of summaries.
+- Checks factual claims against source content or external APIs.
+- Returns a verification report with success status and issues.
+
 
 
 ## 6. Logging & Memory (Folder: `utils/`)
