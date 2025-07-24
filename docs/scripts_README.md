@@ -82,11 +82,6 @@ All agents extend `BaseAgent` and implement an `execute(task: Dict[str, Any]) ->
   - Optional Playwright headless scraping
 - Ensures domain diversity, removes duplicates, and extracts page content.
 
-**Dependencies:**
-
-
----
-
 ## 6. Logging & Memory (Folder: `utils/`)
 - `utils/logger.py` – Logging setup (using `logging` module).
 - `utils/memory.py` – Simple in-memory or persistent cache implementation.
