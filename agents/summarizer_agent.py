@@ -97,27 +97,13 @@ class SummarizerAgent(BaseAgent):
         try:
             product_name = self._extract_product_name(title, content, product_category)
             
-            # BART 
             if self.summarizer:
-                update_keywords = ['announce', 'launch', 'release', 'introduce', 'unveil', 'feature', 'new', 'update']
-                content_sentences = content.split('.')
+                important_content = self._extract_important_content(title, content, product_name)
                 
-                relevant_sentences = []
-                for sentence in content_sentences:
-                    if any(keyword in sentence.lower() for keyword in update_keywords):
-                        relevant_sentences.append(sentence.strip())
-                
-                if relevant_sentences:
-                    text_to_summarize = f"{title}. {'. '.join(relevant_sentences[:5])}"
-                else:
-                    text_to_summarize = f"{title}. {content[:800]}"  # Fallback to first part
-                
-                text_to_summarize = text_to_summarize[:1000]
-                
-                summary_result = self.summarizer(text_to_summarize)
+                summary_result = self.summarizer(important_content)
                 summary_text = summary_result[0]['summary_text']
                 
-                summary_text = self._clean_summary_text(summary_text, product_name)
+                summary_text = self._enhance_summary_with_key_points(summary_text, content, product_name)
                 
                 date = self._extract_date_from_content(f"{title} {content}")
                 
@@ -143,11 +129,13 @@ class SummarizerAgent(BaseAgent):
         
         product_patterns = {
             "consumer_electronics": [
+                # iPhone patterns
                 (r'iphone\s*(\d+(?:\s*pro)?(?:\s*max)?)', r'iPhone \1'),
                 (r'ipad\s*(\w+)', r'iPad \1'),
                 (r'macbook\s*(\w+)', r'MacBook \1'),
                 (r'apple\s*watch\s*(\w+)', r'Apple Watch \1'),
                 (r'airpods\s*(\w+)', r'AirPods \1'),
+                # Samsung patterns
                 (r'galaxy\s*s(\d+)', r'Galaxy S\1'),
                 (r'galaxy\s*note\s*(\d+)', r'Galaxy Note \1'),
                 # General patterns
@@ -159,19 +147,23 @@ class SummarizerAgent(BaseAgent):
                 ("surface", "Microsoft Surface")
             ],
             "ai_productivity": [
+                # Notion patterns
                 (r'notion\s*ai\s*(\d+\.?\d*)', r'Notion AI \1'),
                 (r'notion\s*q&a', r'Notion Q&A'),
                 (r'notion\s*calendar', r'Notion Calendar'),
                 (r'notion\s*database', r'Notion Database'),
                 (r'notion\s*templates', r'Notion Templates'),
                 (r'notion\s*api', r'Notion API'),
+                # ChatGPT patterns
                 (r'gpt-?(\d+)', r'GPT-\1'),
                 (r'chatgpt\s*(\d+\.?\d*)', r'ChatGPT \1'),
                 (r'chatgpt\s*plus', r'ChatGPT Plus'),
                 (r'chatgpt\s*enterprise', r'ChatGPT Enterprise'),
+                # Other AI tools
                 (r'github\s*copilot\s*(\w+)', r'GitHub Copilot \1'),
                 (r'claude\s*(\d+)', r'Claude \1'),
                 (r'microsoft\s*365\s*copilot', r'Microsoft 365 Copilot'),
+                # Fallback patterns
                 ("notion ai", "Notion AI"),
                 ("chatgpt", "ChatGPT"),
                 ("github copilot", "GitHub Copilot"),
@@ -179,14 +171,18 @@ class SummarizerAgent(BaseAgent):
                 ("microsoft 365", "Microsoft 365")
             ],
             "devops_platforms": [
+                # GitHub patterns
                 (r'github\s*actions\s*(\w+)', r'GitHub Actions \1'),
                 (r'github\s*copilot\s*(\w+)', r'GitHub Copilot \1'),
                 (r'github\s*enterprise', r'GitHub Enterprise'),
+                # GitLab patterns
                 (r'gitlab\s*(\d+\.?\d*)', r'GitLab \1'),
                 (r'gitlab\s*ci/cd', r'GitLab CI/CD'),
+                # Other platforms
                 (r'jenkins\s*(\d+\.?\d*)', r'Jenkins \1'),
                 (r'docker\s*(\w+)', r'Docker \1'),
                 (r'kubernetes\s*(\d+\.?\d*)', r'Kubernetes \1'),
+                # Fallback patterns
                 ("github", "GitHub"),
                 ("gitlab", "GitLab"),
                 ("jenkins", "Jenkins"),
@@ -247,6 +243,7 @@ class SummarizerAgent(BaseAgent):
                     day = match.group(2)
                     year = match.group(3)
                     
+                    # Convert month name to number
                     month_map = {
                         'january': '01', 'jan': '01', 'february': '02', 'feb': '02',
                         'march': '03', 'mar': '03', 'april': '04', 'apr': '04',
@@ -285,14 +282,15 @@ class SummarizerAgent(BaseAgent):
         
         current_year = today.year
         if str(current_year) in content or str(current_year-1) in content:
-            return f"{current_year}-01-01"  
+            return f"{current_year}-01-01" 
         
         return "unknown"
     
     def _simple_extraction_fallback(self, title: str, content: str, url: str, product_category: str) -> Dict[str, Any]:
         product_name = self._extract_product_name(title, content, product_category)
         
-        sentences = content.split('.')[:3]  
+        # Create a simple summary from the first few sentences
+        sentences = content.split('.')[:3]  # Take first 3 sentences
         simple_summary = '. '.join(sentences).strip()
         if len(simple_summary) > 200:
             simple_summary = simple_summary[:200] + "..."
@@ -305,6 +303,120 @@ class SummarizerAgent(BaseAgent):
             "relevant": True
         }
     
+    def _extract_important_content(self, title: str, content: str, product_name: str) -> str:
+        
+        importance_categories = {
+            'announcements': ['announce', 'launch', 'release', 'introduce', 'unveil', 'debut'],
+            'features': ['feature', 'capability', 'function', 'technology', 'innovation', 'improvement'],
+            'specifications': ['spec', 'specification', 'performance', 'speed', 'capacity', 'size', 'weight'],
+            'pricing': ['price', 'cost', 'dollar', '$', 'pricing', 'expensive', 'cheap', 'affordable'],
+            'availability': ['available', 'shipping', 'preorder', 'pre-order', 'order', 'buy', 'purchase'],
+            'comparisons': ['versus', 'vs', 'compare', 'better', 'faster', 'slower', 'competitor'],
+            'updates': ['update', 'upgrade', 'version', 'new', 'latest', 'recent', 'change'],
+            'reviews': ['review', 'rating', 'score', 'opinion', 'verdict', 'recommendation']
+        }
+        
+        sentences = content.replace('\n', '. ').split('.')
+        important_sentences = []
+        
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if len(sentence) < 20:
+                continue
+                
+            importance_score = 0
+            sentence_lower = sentence.lower()
+            
+            if product_name.lower() in sentence_lower:
+                importance_score += 3
+            
+            for category, keywords in importance_categories.items():
+                if any(keyword in sentence_lower for keyword in keywords):
+                    importance_score += 2
+                    break
+            
+            import re
+            if re.search(r'\d+', sentence):
+                importance_score += 1
+            
+            if importance_score >= 3:
+                important_sentences.append((sentence, importance_score))
+        
+        important_sentences.sort(key=lambda x: x[1], reverse=True)
+        top_sentences = [sent[0] for sent in important_sentences[:8]]  # Take top 8 sentences
+        
+        if not top_sentences:
+            top_sentences = [s.strip() for s in sentences[:6] if len(s.strip()) > 20]
+        
+        important_text = f"{title}. {'. '.join(top_sentences)}"
+        
+        if len(important_text) > 1000:
+            important_text = important_text[:1000]
+            last_period = important_text.rfind('.')
+            if last_period > 500:  
+                important_text = important_text[:last_period + 1]
+        
+        return important_text
+    
+    def _enhance_summary_with_key_points(self, summary: str, full_content: str, product_name: str) -> str:        
+        key_info = {}
+        content_lower = full_content.lower()
+        
+        import re
+        price_patterns = [
+            r'\$[\d,]+(?:\.\d{2})?',
+            r'[\d,]+\s*dollars?',
+            r'price.*?\$[\d,]+',
+            r'costs?.*?\$[\d,]+'
+        ]
+        
+        for pattern in price_patterns:
+            matches = re.findall(pattern, full_content, re.IGNORECASE)
+            if matches:
+                key_info['pricing'] = matches[0]
+                break
+        
+        date_patterns = [
+            r'(?:available|release[ds]?|launch(?:es|ed)?|shipping)\s+(?:on\s+)?([A-Za-z]+ \d{1,2},? \d{4})',
+            r'([A-Za-z]+ \d{4})',
+            r'(\d{4})',
+            r'(Q[1-4] \d{4})'
+        ]
+        
+        for pattern in date_patterns:
+            matches = re.findall(pattern, full_content, re.IGNORECASE)
+            if matches:
+                key_info['release_date'] = matches[0]
+                break
+        
+        spec_patterns = [
+            r'(\d+(?:\.\d+)?\s*(?:GB|TB|MB|GHz|MHz|inch|inches|core|cores|MP|megapixel))',
+            r'(\d+(?:\.\d+)?\s*hour[s]?\s*battery)',
+            r'(A\d+\s*(?:Bionic|chip|processor))',
+            r'(\d+nm\s*process)'
+        ]
+        
+        specs = []
+        for pattern in spec_patterns:
+            matches = re.findall(pattern, full_content, re.IGNORECASE)
+            specs.extend(matches[:2]) 
+        
+        if specs:
+            key_info['specifications'] = ', '.join(specs[:3])
+        
+        enhanced_summary = summary
+        
+        if key_info.get('pricing') and 'price' not in summary.lower() and '$' not in summary:
+            enhanced_summary += f" Pricing: {key_info['pricing']}."
+        
+        if key_info.get('release_date') and not any(word in summary.lower() for word in ['available', 'release', 'launch']):
+            enhanced_summary += f" Release: {key_info['release_date']}."
+        
+        if key_info.get('specifications') and not any(word in summary.lower() for word in ['gb', 'ghz', 'inch', 'core']):
+            enhanced_summary += f" Key specs: {key_info['specifications']}."
+        
+        return enhanced_summary
+
     def _clean_summary_text(self, summary_text: str, product_name: str) -> str:
         summary_text = summary_text.replace("This article discusses", "")
         summary_text = summary_text.replace("The article explains", "")

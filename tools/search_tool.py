@@ -1,4 +1,4 @@
-# search tool with multiple sources and PDF support.
+# search tool
 
 import time
 import asyncio
@@ -24,7 +24,6 @@ class SearchTool:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         })
         
-        # Preferred domains
         self.news_domains = ['reuters.com', 'bbc.com', 'cnn.com', 'bloomberg.com', 'techcrunch.com', 'theverge.com', 'engadget.com', 'arstechnica.com']
         self.blog_domains = ['medium.com', 'dev.to', 'hackernoon.com', 'towardsdatascience.com']
         self.official_domains = ['apple.com', 'microsoft.com', 'google.com', 'github.com', 'openai.com']
@@ -32,27 +31,29 @@ class SearchTool:
         self.avoid_domains = set()
     
     def search_web(self, query: str, max_results: int = MAX_SEARCH_RESULTS) -> List[Dict[str, Any]]:
+        """Search the web using multiple strategies for diverse results."""
         logger.info(f"Searching for: {query}")
         
         all_results = []
         
         try:
-            #1 General web search
+            # 1 General web search
             general_results = self._search_general(query, max_results // 3)
             all_results.extend(general_results)
             
-            #2 News-specific search
+            # 2 News-specific search
             news_results = self._search_news(query, max_results // 3)
             all_results.extend(news_results)
             
-            #3 Blog and technical content search
+            # 3 Blog and technical content search
             blog_results = self._search_blogs(query, max_results // 3)
             all_results.extend(blog_results)
             
-            # Remove duplicates and filter
-            unique_results = self._ensure_source_diversity(all_results, max_results)
+            deduplicated_results = self._remove_duplicates(all_results)
             
-            logger.info(f"Found {len(unique_results)} diverse search results")
+            unique_results = self._ensure_source_diversity(deduplicated_results, max_results)
+            
+            logger.info(f"Found {len(unique_results)} diverse search results after deduplication")
             return unique_results
             
         except Exception as e:
@@ -71,20 +72,17 @@ class SearchTool:
                 f"{query} new capabilities features launched"
             ]
             
-            for search_query in search_queries[:3]:  # Limit
+            for search_query in search_queries[:3]: 
                 try:
                     search_results = self.ddgs.text(search_query, max_results=max_results//2)
                     
                     for result in search_results:
-                       
                         url = result.get("href", "")
                         title = result.get("title", "")
                         snippet = result.get("body", "")
                         
-                        # Skip dupli URL
                         if any(r.get("url") == url for r in results):
                             continue
-                        
                         
                         domain = urlparse(url).netloc.lower()
                         is_official = any(official in domain for official in self.official_domains)
@@ -119,6 +117,7 @@ class SearchTool:
             return []
     
     def _search_news(self, query: str, max_results: int) -> List[Dict[str, Any]]:
+        """Search for news articles specifically about product updates."""
         try:
             results = []
             
@@ -130,7 +129,7 @@ class SearchTool:
                 f"{query} product news 2024 2025"
             ]
             
-            for news_query in news_queries[:2]:  # Limit queries
+            for news_query in news_queries[:2]: 
                 try:
                     search_results = self.ddgs.news(news_query, max_results=max_results)
                     
@@ -140,16 +139,13 @@ class SearchTool:
                         snippet = result.get("body", "")
                         date = result.get("date", "")
                         
-                        # Skip duplicates
                         if any(r.get("url") == url for r in results):
                             continue
                         
-                        # Filter for relevant news
                         content_text = f"{title} {snippet}".lower()
                         product_keywords = query.lower().split()
                         update_keywords = ['release', 'launch', 'announce', 'introduce', 'unveil', 'feature', 'update', 'new']
                         
-                        # Check if this is actually about the product and updates
                         has_product = any(keyword in content_text for keyword in product_keywords)
                         has_update = any(keyword in content_text for keyword in update_keywords)
                         
@@ -178,9 +174,9 @@ class SearchTool:
             return []
     
     def _search_blogs(self, query: str, max_results: int) -> List[Dict[str, Any]]:
+        """Search for blog posts and technical articles."""
         try:
             results = []
-            # Add blog-specific keywords and site restrictions
             blog_queries = [
                 f"{query} blog post review analysis",
                 f"site:medium.com {query}",
@@ -188,7 +184,7 @@ class SearchTool:
                 f"site:techcrunch.com {query}"
             ]
             
-            for blog_query in blog_queries[:2]:  # Limit queries
+            for blog_query in blog_queries[:2]:  
                 search_results = self.ddgs.text(blog_query, max_results=max_results//2)
                 
                 for result in search_results:
@@ -208,7 +204,37 @@ class SearchTool:
             logger.error(f"Blog search failed: {str(e)}")
             return []
     
+    def _remove_duplicates(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Remove duplicate URLs and very similar titles across all search results."""
+        seen_urls = set()
+        seen_titles = set()
+        deduplicated = []
+        
+        for result in results:
+            url = result.get("url", "").strip()
+            title = result.get("title", "").strip().lower()
+            
+            if not url or url in seen_urls:
+                continue
+            
+            title_words = set(title.split())
+            is_similar = False
+            for seen_title in seen_titles:
+                seen_words = set(seen_title.split())
+                if len(title_words & seen_words) / max(len(title_words), len(seen_words), 1) > 0.7:
+                    is_similar = True
+                    break
+            
+            if not is_similar:
+                seen_urls.add(url)
+                seen_titles.add(title)
+                deduplicated.append(result)
+        
+        logger.info(f"Deduplicated {len(results)} results to {len(deduplicated)} unique results")
+        return deduplicated
+    
     def _ensure_source_diversity(self, results: List[Dict[str, Any]], max_results: int) -> List[Dict[str, Any]]:
+        """Ensure diverse sources by avoiding too many results from the same domain."""
         domain_count = {}
         diverse_results = []
         
@@ -219,7 +245,7 @@ class SearchTool:
                 
             domain = urlparse(url).netloc.lower()
             
-            if domain_count.get(domain, 0) >= 3: 
+            if domain_count.get(domain, 0) >= 3:  
                 continue
                 
             if len(diverse_results) > 0 and domain in self.avoid_domains and len(diverse_results) < max_results // 2:
@@ -247,11 +273,14 @@ class SearchTool:
                     )
                     page = await context.new_page()
                     
+                    # Set timeout and navigate to the page
                     page.set_default_timeout(20000)
                     await page.goto(url, wait_until='domcontentloaded', timeout=20000)
                     
+                    # Wait a bit for dynamic content
                     await page.wait_for_timeout(2000)
                     
+                    # Extract text content
                     content = await page.evaluate("""
                         () => {
                             // Remove script and style elements
@@ -274,7 +303,7 @@ class SearchTool:
                     browser = None
                     
                     if content and len(content.strip()) > 100:
-                        return content.strip()[:3000] 
+                        return content.strip()[:3000]  # Limit content length
                     else:
                         logger.warning(f"Extracted content too short from {url}: {len(content) if content else 0} chars")
                         
@@ -286,7 +315,7 @@ class SearchTool:
                         pass
                 logger.warning(f"Attempt {attempt + 1} failed for {url}: {str(e)[:100]}")
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(3)  
+                    await asyncio.sleep(3)  # Wait before retry
                 
         logger.error(f"Failed to extract content from {url} after {max_retries} attempts")
         return ""
@@ -296,19 +325,17 @@ class SearchTool:
             response = self.session.get(url, timeout=30)
             response.raise_for_status()
             
-            # PyPDF2
             pdf_file = io.BytesIO(response.content)
             pdf_reader = PyPDF2.PdfReader(pdf_file)
             
             text = ""
-            
             max_pages = min(5, len(pdf_reader.pages))
             
             for page_num in range(max_pages):
                 page = pdf_reader.pages[page_num]
                 text += page.extract_text() + "\n"
             
-            text = text.strip()[:5000]  # Limit PDF content
+            text = text.strip()[:5000] 
             logger.info(f"Extracted {len(text)} characters from PDF: {url}")
             return text
             
@@ -324,6 +351,7 @@ class SearchTool:
             article.download()
             article.parse()
             
+            # Combine title and text
             content = f"{article.title}\n\n{article.text}"
             return content.strip()[:3000]
             
@@ -338,9 +366,11 @@ class SearchTool:
             
             soup = BeautifulSoup(response.content, 'html.parser')
             
+            # Remove unwanted elements
             for element in soup(['script', 'style', 'nav', 'footer', 'aside', 'header']):
                 element.decompose()
             
+            # Try to find main content
             content_selectors = ['main', 'article', '.content', '.post', '.entry-content', '#content', '.article-body']
             content = ""
             
@@ -350,10 +380,12 @@ class SearchTool:
                     content = element.get_text(separator=' ', strip=True)
                     break
             
+            # Fallback to body text
             if not content:
                 content = soup.get_text(separator=' ', strip=True)
             
-            content = ' '.join(content.split())  
+            # Clean and limit content
+            content = ' '.join(content.split())  # Remove extra whitespace
             return content[:3000] if content else ""
             
         except Exception as e:
@@ -361,6 +393,7 @@ class SearchTool:
             return ""
     
     def search_and_extract(self, query: str, max_results: int = MAX_SEARCH_RESULTS) -> List[Dict[str, Any]]:
+        """Search the web and extract content from diverse sources."""
         search_results = self.search_web(query, max_results)
         
         extracted_results = []
@@ -369,6 +402,7 @@ class SearchTool:
             if not url:
                 continue
                 
+            # Determine extraction method based on URL
             content = ""
             extraction_method = "failed"
             
@@ -378,13 +412,15 @@ class SearchTool:
                     extraction_method = "pdf"
                 elif any(domain in url.lower() for domain in self.news_domains):
                     content = self.extract_with_newspaper(url)
-                    if not content: 
+                    if not content:  # Fallback to simple requests
                         content = self.extract_simple_requests(url)
                     extraction_method = "newspaper"
                 else:
+                    # Use simple requests instead of playwright to avoid async issues
                     content = self.extract_simple_requests(url)
                     extraction_method = "requests"
                 
+                # Create a properly structured result
                 extracted_result = {
                     "success": bool(content and len(content.strip()) > 50),
                     "url": url,
@@ -398,10 +434,12 @@ class SearchTool:
                 }
                 extracted_results.append(extracted_result)
                 
+                # Add small delay between extractions
                 time.sleep(0.5)
                 
             except Exception as e:
                 logger.error(f"Failed to extract content from {url}: {str(e)}")
+                # Still add failed result for debugging
                 extracted_results.append({
                     "success": False,
                     "url": url,
@@ -415,11 +453,12 @@ class SearchTool:
                     "error": str(e)[:100]
                 })
         
+        # Filter successful extractions and log stats
         successful_results = [r for r in extracted_results if r["success"]]
         logger.info(f"Successfully extracted content from {len(successful_results)}/{len(extracted_results)} sources")
         
+        # Log domain diversity
         domains = set(r["domain"] for r in successful_results)
         logger.info(f"Content extracted from {len(domains)} unique domains: {list(domains)[:5]}")
         
         return extracted_results
-

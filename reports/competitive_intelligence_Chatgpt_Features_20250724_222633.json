@@ -1,0 +1,35 @@
+{
+  "metadata": {
+    "query": "Chatgpt Features",
+    "product_category": "ai_productivity",
+    "category_name": "AI Productivity Tools",
+    "generated_at": "2025-07-24T22:26:33.994340",
+    "total_sources": 6,
+    "verified_updates": 3
+  },
+  "updates": [
+    {
+      "product": "Chatgpt",
+      "summary": "ChatGPT o3-pro will launch this summer for ChatGPT Pro users paying $200/month. OpenAI introduced a new Connectors feature that lets businesses link chatbot to specific data sources. New ChatG PT Features: Gmail Integration And Record Mode.",
+      "source": "https://bgr.com/tech/chatgpt-just-got-a-lot-more-personal-but-it-starts-not-for-everyone/",
+      "date": "2025-06-05"
+    },
+    {
+      "product": "Gpt-4",
+      "summary": "ChatGPT's May 2025 features include Canvas mode, voice conversations, advanced data analysis, memory improvements, and the new GPT-4o model capabilities. ChatGPT May 2025: All New Features & Updates Explained. Click here to read the complete guide. Release: May 2025.",
+      "source": "https://pixelnoir.us/posts/chatgpt-new-features-may-2025/",
+      "date": "2025-05-18"
+    },
+    {
+      "product": "Gpt-4",
+      "summary": "ChatGPT has become an indispensable tool for millions of users worldwide. Early this year, OpenAI launched GPT-4.1. Discover the groundbreaking new features in ChatGPT for 2025 in this comprehensive guide. The Evolution of ChatG PT in 2025 is published by ChatGPTConsultancy.",
+      "source": "https://www.chatgptconsultancy.com/new-features-in-chatgpt-for-2025",
+      "date": "2025-01-01"
+    }
+  ],
+  "summary": {
+    "total_updates_found": 3,
+    "products_mentioned": 2,
+    "recent_updates": 3
+  }
+}
