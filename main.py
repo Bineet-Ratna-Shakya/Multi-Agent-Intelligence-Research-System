@@ -1,4 +1,4 @@
-# CLI entry point for AI Bookkeeping Agent
+# CLI entry point for AI Bookkeeping Agent (Gemini-powered)
 
 import os
 import sys
@@ -13,7 +13,7 @@ def main():
     os.makedirs("reports", exist_ok=True)
     logger = setup_logger("Main", "logs/main.log")
 
-    parser = argparse.ArgumentParser(description="AI Bookkeeping Agent")
+    parser = argparse.ArgumentParser(description="AI Bookkeeping Agent (Gemini-powered)")
     parser.add_argument("--query", "-q", required=True, help="Financial question")
     parser.add_argument("--csv", "-c", default=DEFAULT_CSV_PATH, help="Path to CSV")
     parser.add_argument("--output-format", "-f", default="json", choices=["json", "markdown"])
@@ -30,23 +30,26 @@ def main():
             report = result["report"]
 
             print(f"\n{'='*60}")
-            print(f"Query: {args.query}")
-            print(f"Intent: {result['stats'].get('intent', '?')}")
+            print(f"  Query: {args.query}")
+            print(f"  Model: {result['stats'].get('model', 'gemini')}")
+            print(f"  Transactions: {result['stats'].get('transactions_loaded', '?')}")
             print(f"{'='*60}")
 
             for insight in report.get("insights", []):
                 itype = insight.get("type", "")
-                if itype == "warnings":
-                    print(f"\n  [Note] {insight.get('answer', '')}")
-                    continue
+                title = insight.get("title", "")
+                answer = insight.get("answer", "")
 
-                print(f"\n  [{insight.get('title', '')}]")
-                print(f"  {insight.get('answer', '')}")
-                if insight.get("detail"):
-                    print(f"\n{insight['detail']}")
+                if itype == "red_flags":
+                    print(f"\n  ⚠ RED FLAGS:")
+                    print(f"  {answer}")
+                else:
+                    if title:
+                        print(f"\n  [{title}]")
+                    print(f"  {answer}")
 
             filepath = coordinator.save_report(report, format=args.output_format, filename=args.output_file)
-            print(f"\nReport saved: {filepath}")
+            print(f"\n  Report saved: {filepath}")
         else:
             print(f"\nError: {result.get('error')}")
             sys.exit(1)

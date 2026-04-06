@@ -13,6 +13,11 @@ eggs/
 # Virtual environment
 venv/
 .env/
+.env
+
+# Reports and logs
+reports/
+logs/
 
 # IDE files
 .vscode/

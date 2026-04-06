@@ -1,4 +1,4 @@
-# Streamlit UI - AI Bookkeeping Agent (Conversational)
+# Streamlit UI - AI Bookkeeping Agent (Gemini-powered)
 
 import streamlit as st
 import json
@@ -8,7 +8,7 @@ import traceback
 from datetime import datetime
 from agents.coordinator_agent import CoordinatorAgent
 from utils.logger import setup_logger
-from config import DEFAULT_CSV_PATH
+from config import DEFAULT_CSV_PATH, GEMINI_API_KEY
 
 st.set_page_config(page_title="AI Bookkeeping Agent", page_icon="$", layout="wide", initial_sidebar_state="expanded")
 
@@ -27,14 +27,23 @@ def get_coordinator():
 
 def analyze(query: str, csv_path: str):
     coordinator = get_coordinator()
-    task = {"query": query.strip(), "csv_path": csv_path}
-    return coordinator.execute(task)
+    return coordinator.execute({"query": query.strip(), "csv_path": csv_path})
 
 
-# ── Sidebar ──────────────────────────────────────────────────────
+# ── Sidebar ──
 
 with st.sidebar:
     st.header("AI Bookkeeping Agent")
+    st.caption("Powered by Gemini 2.0 Flash")
+
+    # API key check
+    if not GEMINI_API_KEY or GEMINI_API_KEY == "your-api-key-here":
+        st.error("GEMINI_API_KEY not set in .env file")
+        api_key_input = st.text_input("Enter Gemini API Key:", type="password")
+        if api_key_input:
+            os.environ["GEMINI_API_KEY"] = api_key_input
+            st.success("Key set for this session!")
+            st.rerun()
 
     uploaded = st.file_uploader("Upload your CSV", type=["csv"],
                                  help="Optional - uses demo data if empty")
@@ -50,16 +59,14 @@ with st.sidebar:
     st.markdown("**Try asking:**")
 
     suggestions = [
-        "What's my biggest expense category?",
-        "Show me income breakdown",
-        "What's my net profit?",
-        "How much on marketing?",
-        "Any unusual transactions?",
-        "Compare my expense categories",
-        "Show me spending trends",
-        "How many transactions do I have?",
-        "Tell me about payroll expenses",
-        "What's my largest single expense?",
+        "What's my biggest expense category this month?",
+        "Break down my income sources",
+        "Am I profitable? What's my margin?",
+        "How much am I spending on marketing? Is it worth it?",
+        "Any suspicious or unusual transactions?",
+        "What should I cut to save money?",
+        "Compare my payroll vs marketing costs",
+        "Give me a full financial health check",
     ]
     for s in suggestions:
         if st.button(s, use_container_width=True, key=f"btn_{s}"):
@@ -78,78 +85,65 @@ with st.sidebar:
         st.rerun()
 
 
-# ── Main Chat ────────────────────────────────────────────────────
+# ── Main Chat ──
 
 st.title("AI Bookkeeping Agent")
 
-# Render chat history (without charts - just text)
+# Render history
 for msg in st.session_state.chat_history:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Get query from chat input or sidebar button
-query = st.chat_input("Ask about your finances...")
+# Get query
+query = st.chat_input("Ask anything about your finances...")
 if "pending_query" in st.session_state:
     query = st.session_state.pop("pending_query")
 
 if query:
-    # User message
     st.session_state.chat_history.append({"role": "user", "content": query})
     with st.chat_message("user"):
         st.markdown(query)
 
-    # Assistant response
     with st.chat_message("assistant"):
-        with st.spinner("Analyzing..."):
+        with st.spinner("Gemini is analyzing your transactions..."):
             result = analyze(query, st.session_state.csv_path)
 
         if result["success"]:
             report = result["report"]
             insights = report.get("insights", [])
-            stats = report.get("financial_stats", {})
-            intent = report.get("intent", "overview")
 
-            # Build the text response
-            response_parts = []
+            full_response = ""
 
             for insight in insights:
                 answer = insight.get("answer", "")
-                detail = insight.get("detail", "")
-                title = insight.get("title", "")
+                itype = insight.get("type", "")
 
-                if insight.get("type") == "warnings":
-                    st.caption(f"Note: {answer}")
+                if itype == "red_flags":
+                    st.warning("**Red Flags Detected:**")
+                    st.markdown(answer)
+                    full_response += f"\n\n**Red Flags:**\n{answer}"
                     continue
 
-                st.markdown(f"**{title}**")
                 st.markdown(answer)
-                response_parts.append(f"**{title}**: {answer}")
+                full_response += answer
 
-                if detail:
-                    with st.expander("Details"):
-                        st.markdown(detail)
-
-                # Show chart if data exists
+                # Show chart
                 chart_data = insight.get("chart_data", {})
                 chart_type = insight.get("chart_type")
 
-                if chart_data and chart_type == "bar":
+                if chart_data and chart_type in ("bar", "comparison"):
                     chart_df = pd.DataFrame(
                         list(chart_data.items()), columns=["Category", "Amount"]
                     ).set_index("Category")
                     st.bar_chart(chart_df)
-
-                elif chart_data and chart_type == "comparison":
-                    chart_df = pd.DataFrame(
-                        list(chart_data.items()), columns=["Type", "Amount"]
-                    ).set_index("Type")
-                    st.bar_chart(chart_df)
-
                 elif chart_data and chart_type == "line":
                     chart_df = pd.DataFrame(
                         list(chart_data.items()), columns=["Date", "Amount"]
                     ).set_index("Date")
                     st.line_chart(chart_df)
+
+            # Show which model was used
+            st.caption(f"Model: {result['stats'].get('model', 'gemini')} | Transactions: {result['stats'].get('transactions_loaded', '?')}")
 
             # Download
             report_json = json.dumps(report, indent=2, default=str)
@@ -159,20 +153,24 @@ if query:
 
             st.session_state.chat_history.append({
                 "role": "assistant",
-                "content": "\n\n".join(response_parts) if response_parts else "Analysis complete."
+                "content": full_response or "Analysis complete."
             })
         else:
-            err = f"Error: {result.get('error', 'Unknown')}"
-            st.error(err)
-            st.session_state.chat_history.append({"role": "assistant", "content": err})
+            err = result.get("error", "Unknown error")
+            if "GEMINI_API_KEY" in err:
+                st.error("Gemini API key not configured. Add it in the sidebar or in your .env file.")
+            else:
+                st.error(f"Error: {err}")
+            st.session_state.chat_history.append({"role": "assistant", "content": f"Error: {err}"})
 
-# Welcome screen
+# Welcome
 if not st.session_state.chat_history:
-    st.info("Ask a question about your finances, or click a suggestion in the sidebar.")
+    st.info("Ask anything about your finances. This agent uses **Gemini 2.0 Flash** to actually reason about your data - not just pattern matching.")
+
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown("**TransactionAgent**\n\nLoads & categorizes your transactions")
+        st.markdown("**1. TransactionAgent**\n\nGemini categorizes your transactions intelligently")
     with col2:
-        st.markdown("**SummarizerAgent**\n\nAnswers your specific question")
+        st.markdown("**2. AnalystAgent**\n\nGemini reasons about your question and generates insights")
     with col3:
-        st.markdown("**VerifierAgent**\n\nValidates data & flags anomalies")
+        st.markdown("**3. VerifierAgent**\n\nGemini audits for red flags and anomalies")

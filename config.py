@@ -1,11 +1,15 @@
-# Configuration settings for the Financial Agent
+# Configuration for AI Bookkeeping Agent
 
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Data settings
+# Gemini
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = "gemini-2.0-flash"
+
+# Data
 DEFAULT_CSV_PATH = os.path.join(os.path.dirname(__file__), "data", "transactions.csv")
 
 # Agent settings
