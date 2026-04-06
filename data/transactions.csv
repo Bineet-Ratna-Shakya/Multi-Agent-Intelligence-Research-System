@@ -1,0 +1,41 @@
+date,description,amount,type
+2026-04-01,Google Ads Campaign,-1200.00,expense
+2026-04-01,Client Payment - Acme Corp,5000.00,income
+2026-04-02,AWS Hosting Monthly,-450.00,expense
+2026-04-02,Office Supplies - Staples,-89.50,expense
+2026-04-03,Freelance Developer Payment,-2500.00,expense
+2026-04-03,Subscription Revenue,3200.00,income
+2026-04-04,Facebook Ads,-800.00,expense
+2026-04-04,Team Lunch Meeting,-125.00,expense
+2026-04-05,Client Payment - Beta Inc,7500.00,income
+2026-04-05,Slack Pro Subscription,-12.50,expense
+2026-04-06,Zoom Business Plan,-19.99,expense
+2026-04-06,GitHub Enterprise,-21.00,expense
+2026-04-07,Marketing Brochure Printing,-340.00,expense
+2026-04-07,SEO Consulting Fee,-600.00,expense
+2026-04-08,Client Payment - Gamma LLC,4200.00,income
+2026-04-08,Electricity Bill,-210.00,expense
+2026-04-09,Internet Service,-99.00,expense
+2026-04-09,Insurance Premium,-500.00,expense
+2026-04-10,Employee Salary - Alice,-4500.00,expense
+2026-04-10,Employee Salary - Bob,-4500.00,expense
+2026-04-11,Product Sales,2800.00,income
+2026-04-11,Shipping Costs,-180.00,expense
+2026-04-12,LinkedIn Ads,-550.00,expense
+2026-04-12,Domain Renewal,-14.99,expense
+2026-04-13,Consulting Revenue,6000.00,income
+2026-04-13,Tax Advisory Fee,-750.00,expense
+2026-04-14,Client Payment - Delta Co,3500.00,income
+2026-04-14,Travel - Flight to NYC,-320.00,expense
+2026-04-15,Travel - Hotel NYC,-280.00,expense
+2026-04-15,Travel - Meals NYC,-95.00,expense
+2026-04-16,Refund - Overcharged Service,150.00,income
+2026-04-16,Postage and Courier,-45.00,expense
+2026-04-17,Interest Income,120.00,income
+2026-04-17,Bank Service Charges,-35.00,expense
+2026-04-18,Client Payment - Epsilon SA,8500.00,income
+2026-04-18,Cloud Storage - Dropbox,-15.00,expense
+2026-04-19,Figma Team License,-45.00,expense
+2026-04-19,Notion Business Plan,-16.00,expense
+2026-04-20,Training Course - Udemy,-29.99,expense
+2026-04-20,Conference Registration,-499.00,expense

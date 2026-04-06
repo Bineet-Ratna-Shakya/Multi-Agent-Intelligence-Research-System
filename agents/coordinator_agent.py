@@ -1,4 +1,4 @@
-# Coordinator Agent 
+# Financial Coordinator Agent - Orchestrates the financial analysis pipeline
 
 import json
 from typing import Dict, Any, List
@@ -8,245 +8,190 @@ from agents.search_agent import SearchAgent
 from agents.summarizer_agent import SummarizerAgent
 from agents.verifier_agent import VerifierAgent
 from utils.memory import SimpleMemory
-from config import PRODUCT_CATEGORIES
+
 
 class CoordinatorAgent(BaseAgent):
-    
+
     def __init__(self, memory=None):
         super().__init__("CoordinatorAgent", memory)
-        
+
         shared_memory = memory or SimpleMemory()
-        
-        self.search_agent = SearchAgent(shared_memory)
+
+        self.transaction_agent = SearchAgent(shared_memory)
         self.summarizer_agent = SummarizerAgent(shared_memory)
         self.verifier_agent = VerifierAgent(shared_memory)
-    
+
     def execute(self, task: Dict[str, Any]) -> Dict[str, Any]:
         query = task.get("query", "")
-        product_category = task.get("product_category", "")
-        
+        csv_path = task.get("csv_path", None)
+
         if not query:
-            return {
-                "success": False,
-                "error": "No query provided",
-                "report": None
-            }
-        
-        if product_category not in PRODUCT_CATEGORIES:
-            return {
-                "success": False,
-                "error": f"Invalid product category. Must be one of: {list(PRODUCT_CATEGORIES.keys())}",
-                "report": None
-            }
-        
+            return {"success": False, "error": "No query provided", "report": None}
+
         self.log_interaction("coordination_start", {
             "query": query,
-            "product_category": product_category,
             "timestamp": datetime.now().isoformat()
         })
-        
+
         try:
-            self.logger.info("Step 1: Searching for relevant sources...")
-            search_task = {
-                "query": query,
-                "product_category": product_category
+            # Step 1: Load and categorize transactions
+            self.logger.info("Step 1: Loading and categorizing transactions...")
+            txn_task = {"query": query}
+            if csv_path:
+                txn_task["csv_path"] = csv_path
+
+            txn_result = self.transaction_agent.execute(txn_task)
+
+            if not txn_result.get("success"):
+                return {"success": False, "error": f"Transaction loading failed: {txn_result.get('error')}", "report": None}
+
+            transactions = txn_result.get("transactions", [])
+            stats = txn_result.get("summary_stats", {})
+
+            if not transactions:
+                return {"success": False, "error": "No transactions found in CSV", "report": None}
+
+            # Step 2: Generate financial summaries and insights
+            self.logger.info("Step 2: Generating financial insights...")
+            summary_task = {
+                "transactions": transactions,
+                "summary_stats": stats,
+                "query": query
             }
-            
-            search_result = self.search_agent.execute(search_task)
-            
-            if not search_result.get("success", False):
-                return {
-                    "success": False,
-                    "error": f"Search failed: {search_result.get('error', 'Unknown error')}",
-                    "report": None
-                }
-            
-            search_results = search_result.get("results", [])
-            
-            if not search_results:
-                return {
-                    "success": False,
-                    "error": "No relevant sources found",
-                    "report": None
-                }
-            
-            self.logger.info("Step 2: Summarizing content...")
-            summarization_task = {
-                "search_results": search_results,
-                "product_category": product_category
-            }
-            
-            summarization_result = self.summarizer_agent.execute(summarization_task)
-            
-            if not summarization_result.get("success", False):
-                return {
-                    "success": False,
-                    "error": f"Summarization failed: {summarization_result.get('error', 'Unknown error')}",
-                    "report": None
-                }
-            
-            summaries = summarization_result.get("summaries", [])
-            
-            if not summaries:
-                return {
-                    "success": False,
-                    "error": "No summaries generated",
-                    "report": None
-                }
-            
-            self.logger.info("Step 3: Verifying information...")
-            verification_task = {
+
+            summary_result = self.summarizer_agent.execute(summary_task)
+
+            if not summary_result.get("success"):
+                return {"success": False, "error": f"Summarization failed: {summary_result.get('error')}", "report": None}
+
+            summaries = summary_result.get("summaries", [])
+
+            # Step 3: Verify and detect anomalies
+            self.logger.info("Step 3: Verifying and detecting anomalies...")
+            verify_task = {
                 "summaries": summaries,
-                "product_category": product_category
+                "transactions": transactions
             }
-            
-            verification_result = self.verifier_agent.execute(verification_task)
-            
-            if not verification_result.get("success", False):
-                return {
-                    "success": False,
-                    "error": f"Verification failed: {verification_result.get('error', 'Unknown error')}",
-                    "report": None
-                }
-            
-            verified_summaries = verification_result.get("verified_summaries", [])
-            
-            self.logger.info("Step 4: Generating final report...")
-            report = self._generate_report(
-                query=query,
-                product_category=product_category,
-                search_stats=search_result,
-                summaries=verified_summaries,
-                verification_stats=verification_result
-            )
-            
+
+            verify_result = self.verifier_agent.execute(verify_task)
+
+            if not verify_result.get("success"):
+                return {"success": False, "error": f"Verification failed: {verify_result.get('error')}", "report": None}
+
+            verified_summaries = verify_result.get("verified_summaries", [])
+
+            # Step 4: Generate report
+            self.logger.info("Step 4: Generating report...")
+            report = self._generate_report(query, transactions, stats, verified_summaries)
+
             result = {
                 "success": True,
                 "report": report,
                 "stats": {
-                    "sources_found": len(search_results),
+                    "transactions_loaded": len(transactions),
                     "summaries_generated": len(summaries),
                     "summaries_verified": len(verified_summaries),
-                    "summaries_filtered": len(summaries) - len(verified_summaries)
+                    "anomalies_found": verify_result.get("anomalies_found", 0)
                 }
             }
-            
+
             self.log_interaction("coordination_complete", {
                 "query": query,
                 "success": True,
                 "stats": result["stats"],
                 "timestamp": datetime.now().isoformat()
             })
-            
+
             return result
-            
+
         except Exception as e:
-            error_result = {
-                "success": False,
-                "error": str(e),
-                "report": None
-            }
-            
             self.log_interaction("coordination_error", {
                 "query": query,
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()
             })
-            
-            return error_result
-    
-    def _generate_report(self, query: str, product_category: str, search_stats: Dict[str, Any], 
-                        summaries: List[Dict[str, Any]], verification_stats: Dict[str, Any]) -> Dict[str, Any]:
-        
-        summaries.sort(key=lambda x: x.get("verification", {}).get("confidence_score", 0), reverse=True)
-        
-        report = {
+            return {"success": False, "error": str(e), "report": None}
+
+    def _generate_report(self, query: str, transactions: List[Dict[str, Any]],
+                          stats: Dict[str, Any],
+                          summaries: List[Dict[str, Any]]) -> Dict[str, Any]:
+        return {
             "metadata": {
                 "query": query,
-                "product_category": product_category,
-                "category_name": PRODUCT_CATEGORIES.get(product_category, "Unknown"),
                 "generated_at": datetime.now().isoformat(),
-                "total_sources": search_stats.get("total_found", 0),
-                "verified_updates": len(summaries)
+                "total_transactions": len(transactions),
+                "period": f"{transactions[0]['date']} to {transactions[-1]['date']}" if transactions else "N/A"
             },
-            "updates": []
+            "financial_stats": stats,
+            "insights": [
+                {
+                    "title": s.get("title", ""),
+                    "type": s.get("type", ""),
+                    "summary": s.get("summary", ""),
+                    "confidence": s.get("verification", {}).get("confidence_score", 0.9)
+                }
+                for s in summaries
+            ],
+            "transactions": transactions
         }
-        
-        for summary in summaries:
-            update_entry = {
-                "product": summary.get("product", "Unknown"),
-                "summary": summary.get("summary", summary.get("update", "")),  
-                "source": summary.get("source", ""),
-                "date": summary.get("date", "unknown")
-            }
-            
-            report["updates"].append(update_entry)
-        
-        report["summary"] = {
-            "total_updates_found": len(summaries),
-            "products_mentioned": len(set(s.get("product", "Unknown") for s in summaries if s.get("product") != "Unknown")),
-            "recent_updates": len([s for s in summaries if s.get("date", "").startswith("2024") or s.get("date", "").startswith("2025")])
-        }
-        
-        return report
-    
+
     def save_report(self, report: Dict[str, Any], format: str = "json", filename: str = None) -> str:
+        import os
+        os.makedirs("reports", exist_ok=True)
+
         if not filename:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            query_safe = report["metadata"]["query"].replace(" ", "_").replace("/", "_")[:20]
-            filename = f"competitive_intelligence_{query_safe}_{timestamp}"
-        
+            filename = f"financial_report_{timestamp}"
+
         if format.lower() == "json":
             filepath = f"reports/{filename}.json"
-            with open(filepath, 'w', encoding='utf-8') as f:
+            with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(report, f, indent=2, ensure_ascii=False)
-        
+
         elif format.lower() == "markdown":
             filepath = f"reports/{filename}.md"
-            markdown_content = self._generate_markdown_report(report)
-            with open(filepath, 'w', encoding='utf-8') as f:
-                f.write(markdown_content)
-        
+            md = self._generate_markdown_report(report)
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(md)
         else:
             raise ValueError(f"Unsupported format: {format}")
-        
+
         self.logger.info(f"Report saved to: {filepath}")
         return filepath
-    
+
     def _generate_markdown_report(self, report: Dict[str, Any]) -> str:
-        metadata = report["metadata"]
-        updates = report["updates"]
-        summary = report["summary"]
-        
-        markdown = f"""# Competitive Intelligence Report
-        
-## Query Information
-- **Query**: {metadata["query"]}
-- **Product Category**: {metadata["category_name"]}
-- **Generated**: {metadata["generated_at"]}
-- **Total Sources Analyzed**: {metadata["total_sources"]}
-- **Verified Updates**: {metadata["verified_updates"]}
+        meta = report["metadata"]
+        stats = report["financial_stats"]
+        insights = report["insights"]
 
-## Summary Statistics
-- **Total Updates Found**: {summary["total_updates_found"]}
-- **Products Mentioned**: {summary["products_mentioned"]}
-- **Recent Updates (2024-2025)**: {summary["recent_updates"]}
+        md = f"""# Financial Analysis Report
 
-## Product Updates
+## Overview
+- **Query**: {meta["query"]}
+- **Period**: {meta["period"]}
+- **Generated**: {meta["generated_at"]}
+- **Transactions Analyzed**: {meta["total_transactions"]}
 
+## Financial Summary
+| Metric | Amount |
+|--------|--------|
+| Total Income | ${stats.get('total_income', 0):,.2f} |
+| Total Expenses | ${stats.get('total_expenses', 0):,.2f} |
+| Net Profit/Loss | ${stats.get('net', 0):,.2f} |
+
+## Expense Breakdown
+| Category | Amount |
+|----------|--------|
 """
-        
-        for i, update in enumerate(updates, 1):
-            markdown += f"""### {i}. {update["product"]}
+        for cat, amt in stats.get("expense_by_category", {}).items():
+            md += f"| {cat} | ${amt:,.2f} |\n"
 
-**Summary**: {update["summary"]}
+        md += "\n## Income Breakdown\n| Source | Amount |\n|--------|--------|\n"
+        for cat, amt in stats.get("income_by_category", {}).items():
+            md += f"| {cat} | ${amt:,.2f} |\n"
 
-**Date**: {update["date"]}
-**Source**: [{update["source"]}]({update["source"]})
+        md += "\n## Insights\n\n"
+        for insight in insights:
+            md += f"### {insight['title']}\n{insight['summary']}\n\n"
 
----
-
-"""
-        
-        return markdown
-
+        return md

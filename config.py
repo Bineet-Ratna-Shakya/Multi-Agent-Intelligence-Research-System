@@ -1,20 +1,33 @@
-# Configuration settings for the agent
+# Configuration settings for the Financial Agent
 
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-MAX_SEARCH_RESULTS = 8  
-MAX_RETRY_ATTEMPTS = 3
-SEARCH_TIMEOUT = 30
+# Data settings
+DEFAULT_CSV_PATH = os.path.join(os.path.dirname(__file__), "data", "transactions.csv")
 
-PRODUCT_CATEGORIES = {
-    "ai_productivity": "AI Productivity Tools",
-    "devops_platforms": "DevOps Platforms", 
-    "consumer_electronics": "Consumer Electronics"
+# Agent settings
+MAX_RETRY_ATTEMPTS = 3
+
+EXPENSE_CATEGORIES = {
+    "Marketing": ["ads", "campaign", "seo", "brochure", "linkedin", "facebook", "google ads", "marketing"],
+    "Operations": ["hosting", "aws", "cloud", "internet", "electricity", "office supplies", "postage", "courier", "shipping", "domain"],
+    "Payroll": ["salary", "employee", "freelance", "developer payment"],
+    "Software": ["subscription", "slack", "zoom", "github", "figma", "notion", "dropbox"],
+    "Travel": ["travel", "flight", "hotel", "meals", "conference"],
+    "Professional Services": ["consulting", "advisory", "tax", "insurance", "training", "course", "registration"],
+    "Finance": ["bank", "interest", "charges", "service charge"],
+    "Other": []
+}
+
+INCOME_CATEGORIES = {
+    "Client Payments": ["client payment"],
+    "Revenue": ["revenue", "sales", "product sales", "subscription revenue"],
+    "Consulting": ["consulting"],
+    "Other Income": ["refund", "interest income"]
 }
 
 LOG_LEVEL = "INFO"
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-

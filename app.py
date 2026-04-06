@@ -1,25 +1,27 @@
-# Streamlit UI
+# Streamlit UI - AI Bookkeeping Agent
 
 import streamlit as st
 import json
 import os
+import pandas as pd
 import traceback
 from datetime import datetime
 from agents.coordinator_agent import CoordinatorAgent
 from utils.logger import setup_logger
-from config import PRODUCT_CATEGORIES
+from config import DEFAULT_CSV_PATH
 
 st.set_page_config(
-    page_title="Competitive Intelligence System",
+    page_title="AI Bookkeeping Agent",
+    page_icon="$",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-if 'initialized' not in st.session_state:
+if "initialized" not in st.session_state:
     st.session_state.initialized = True
     st.session_state.coordinator = None
-    st.session_state.last_query = ""
-    st.session_state.last_category = "ai_productivity"
+    st.session_state.chat_history = []
+
 
 @st.cache_resource
 def setup_logging():
@@ -30,223 +32,199 @@ def setup_logging():
         st.error(f"Failed to setup logging: {e}")
         return None
 
+
 logger = setup_logging()
+
 
 @st.cache_resource
 def get_coordinator():
     try:
         os.makedirs("reports", exist_ok=True)
-        coordinator = CoordinatorAgent()
-        return coordinator
+        return CoordinatorAgent()
     except Exception as e:
         st.error(f"Failed to initialize coordinator: {e}")
         if logger:
             logger.error(f"Failed to initialize coordinator: {e}")
         return None
 
-def run_analysis(query, category_tuple, output_format):
+
+def run_analysis(query, csv_path=None):
     try:
         coordinator = get_coordinator()
         if not coordinator:
             return False, "Failed to initialize the system"
-        
-        task = {
-            "query": query.strip(),
-            "product_category": category_tuple[0]
-        }
-        
+
+        task = {"query": query.strip()}
+        if csv_path:
+            task["csv_path"] = csv_path
+
         result = coordinator.execute(task)
-        
+
         if result["success"]:
             return True, result
         else:
-            error_msg = result.get("error", "Unknown error occurred")
-            return False, error_msg
-            
+            return False, result.get("error", "Unknown error occurred")
+
     except Exception as e:
         error_msg = f"System error: {str(e)}"
         if logger:
             logger.error(f"Analysis failed: {error_msg}\n{traceback.format_exc()}")
         return False, error_msg
 
+
 def main():
-    st.title("Multi-Agent Competitive Intelligence System")
-    st.markdown("**Discover the latest product updates using AI agents - Made by Bineet Shakya.**")
+    st.title("AI Bookkeeping Agent")
+    st.markdown("**Multi-agent financial intelligence system - Analyze your transactions with AI.**")
     st.divider()
-    
+
+    # Sidebar
     with st.sidebar:
-        st.header("Query Configuration")
-        
-        query = st.text_area(
-            "Search Query",
-            value=st.session_state.get('query_input', ''),
-            placeholder="e.g., 'iPhone 16 features' or 'ChatGPT updates'",
-            help="Enter your search query",
-            key="query_input"
-        )
-        
-        category_options = [
-            ("ai_productivity", "AI Productivity Tools"),
-            ("devops_platforms", "DevOps Platforms"), 
-            ("consumer_electronics", "Consumer Electronics")
+        st.header("Configuration")
+
+        uploaded_file = st.file_uploader("Upload CSV (optional)", type=["csv"],
+                                          help="Upload your own transactions CSV or use the built-in demo data")
+
+        csv_path = DEFAULT_CSV_PATH
+        if uploaded_file is not None:
+            os.makedirs("data", exist_ok=True)
+            upload_path = os.path.join("data", "uploaded_transactions.csv")
+            with open(upload_path, "wb") as f:
+                f.write(uploaded_file.getvalue())
+            csv_path = upload_path
+            st.success("CSV uploaded!")
+
+        st.divider()
+
+        st.subheader("Quick Questions")
+        quick_queries = [
+            "What's my biggest expense category this month?",
+            "Show me my income breakdown",
+            "What's my net profit?",
+            "How much am I spending on marketing?",
+            "Give me a full financial overview"
         ]
-        
-        default_index = 0
+
+        for q in quick_queries:
+            if st.button(q, use_container_width=True):
+                st.session_state["prefilled_query"] = q
+
+        st.divider()
+
+        # Show raw data preview
+        st.subheader("Data Preview")
         try:
-            if 'category_selection' in st.session_state:
-                for i, (key, _) in enumerate(category_options):
-                    if key == st.session_state.category_selection:
-                        default_index = i
-                        break
-        except:
-            default_index = 0
-        
-        category = st.selectbox(
-            "Product Category",
-            options=category_options,
-            index=default_index,
-            format_func=lambda x: x[1],
-            help="Select the product category that best matches your query",
-            key="category_selection"
-        )
-        
-        output_format = st.radio(
-            "Output Format",
-            options=["markdown", "json"],
-            index=0,
-            help="Choose the format for the downloadable report"
-        )
-        
-        analyze_button = st.button(
-            "Run Analysis",
-            type="primary",
-            use_container_width=True,
-            disabled=not query.strip()
-        )
-        
-    
-    if analyze_button and query.strip():
-        with st.spinner("Searching and analyzing content... This may take TimmmeeEeEeEeEeeee."):
-            
-            success, result_data = run_analysis(query, category, output_format)
-            
+            preview_df = pd.read_csv(csv_path)
+            st.dataframe(preview_df.head(10), use_container_width=True, height=300)
+        except Exception as e:
+            st.error(f"Could not load CSV: {e}")
+
+    # Main chat area
+    query = st.chat_input("Ask about your finances...")
+
+    # Check for prefilled query from sidebar
+    if "prefilled_query" in st.session_state:
+        query = st.session_state.pop("prefilled_query")
+
+    # Display chat history
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    if query:
+        # Show user message
+        st.session_state.chat_history.append({"role": "user", "content": query})
+        with st.chat_message("user"):
+            st.markdown(query)
+
+        # Process and show response
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing your transactions..."):
+                success, result_data = run_analysis(query, csv_path)
+
             if success:
                 report = result_data["report"]
                 stats = result_data["stats"]
-                
-                tab1, tab2, tab3 = st.tabs(["Summary", "Details", "Download"])
-                
-                with tab1:
-                    st.subheader("Analysis Summary")
-                    
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric("Sources Found", stats.get('sources_found', 0))
-                    with col2:
-                        st.metric("Summaries Generated", stats.get('summaries_generated', 0))
-                    with col3:
-                        st.metric("Summaries Verified", stats.get('summaries_verified', 0))
-                    with col4:
-                        st.metric("Products Found", report.get('summary', {}).get('products_mentioned', 0))
-                    
+                financial_stats = report.get("financial_stats", {})
+
+                # Metrics row
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Transactions", stats.get("transactions_loaded", 0))
+                with col2:
+                    st.metric("Total Income", f"${financial_stats.get('total_income', 0):,.2f}")
+                with col3:
+                    st.metric("Total Expenses", f"${financial_stats.get('total_expenses', 0):,.2f}")
+                with col4:
+                    net = financial_stats.get("net", 0)
+                    st.metric("Net Profit/Loss", f"${net:,.2f}",
+                              delta=f"{'Profit' if net > 0 else 'Loss'}")
+
+                st.divider()
+
+                # Show insights
+                insights = report.get("insights", [])
+                response_text = ""
+                for insight in insights:
+                    title = insight.get("title", "")
+                    summary = insight.get("summary", "")
+                    st.markdown(f"**{title}**")
+                    st.markdown(summary)
+                    st.markdown("")
+                    response_text += f"**{title}**: {summary}\n\n"
+
+                # Expense chart
+                expense_by_cat = financial_stats.get("expense_by_category", {})
+                if expense_by_cat:
                     st.divider()
-                    
-                    st.markdown(f"""
-                    **Query**: {query}  
-                    **Category**: {category[1]}  
-                    **Generated**: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}  
-                    **Total Updates Found**: {report.get('summary', {}).get('total_updates_found', 0)}
-                    """)
-                
-                with tab2:
-                    st.subheader("Product Updates")
-                    
-                    updates = report.get("updates", [])
-                    if updates:
-                        for i, update in enumerate(updates, 1):
-                            with st.expander(f"{i}. {update.get('product', 'Unknown Product')}", expanded=True):
-                                st.markdown(f"**Summary**: {update.get('summary', 'No summary available')}")
-                                
-                                col1, col2 = st.columns(2)
-                                with col1:
-                                    st.markdown(f"**Date**: {update.get('date', 'Unknown')}")
-                                with col2:
-                                    source_url = update.get('source', '#')
-                                    if source_url and source_url != '#':
-                                        st.markdown(f"**Source**: [View Source]({source_url})")
-                                    else:
-                                        st.markdown("**Source**: Not available")
-                    else:
-                        st.info("No product updates found. Try a different query or category.")
-                
-                with tab3:
-                    st.subheader("Download Report")
-                    
-                    try:
-                        coordinator = get_coordinator()
-                        if coordinator:
-                            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                            query_safe = "".join(c for c in query if c.isalnum() or c in (' ', '-', '_')).rstrip()
-                            query_safe = query_safe.replace(" ", "_")[:20]
-                            filename = f"competitive_intelligence_{query_safe}_{timestamp}"
-                            
-                            filepath = coordinator.save_report(report, format=output_format, filename=filename)
-                            
-                            with open(filepath, 'r', encoding='utf-8') as f:
-                                file_content = f.read()
-                            
-                            st.download_button(
-                                label=f"Download {output_format.upper()} Report",
-                                data=file_content,
-                                file_name=f"{filename}.{output_format}",
-                                mime="application/json" if output_format == "json" else "text/markdown"
-                            )
-                            
-                            st.success(f"Report saved successfully: {filepath}")
-                        else:
-                            st.error("Could not save report - system initialization failed")
-                            
-                    except Exception as e:
-                        st.error(f"Error saving report: {str(e)}")
-                        if logger:
-                            logger.error(f"Error saving report: {str(e)}")
+                    st.markdown("**Expense Distribution**")
+                    chart_df = pd.DataFrame(
+                        list(expense_by_cat.items()),
+                        columns=["Category", "Amount"]
+                    )
+                    st.bar_chart(chart_df.set_index("Category"))
+
+                # Download button
+                st.divider()
+                report_json = json.dumps(report, indent=2)
+                st.download_button(
+                    "Download Full Report (JSON)",
+                    data=report_json,
+                    file_name=f"financial_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                    mime="application/json"
+                )
+
+                st.session_state.chat_history.append({
+                    "role": "assistant",
+                    "content": response_text or "Analysis complete. See the charts and metrics above."
+                })
             else:
-                st.error(f"Analysis failed: {result_data}")
-    
-    elif analyze_button and not query.strip():
-        st.warning("Please enter a search query")
-    
-    if not analyze_button or not query.strip():
-        st.info("Enter a query in the sidebar and click 'Run Analysis' to start")
-        
-        st.subheader("System Information")
-        col1, col2 = st.columns(2)
-        
+                error_msg = f"Analysis failed: {result_data}"
+                st.error(error_msg)
+                st.session_state.chat_history.append({"role": "assistant", "content": error_msg})
+
+    # Welcome screen when no query
+    if not query and not st.session_state.chat_history:
+        st.info("Ask a question about your finances using the chat input below, or click a quick question in the sidebar!")
+
+        st.subheader("How It Works")
+        col1, col2, col3 = st.columns(3)
+
         with col1:
             st.markdown("""
-            **Agent Pipeline:**
-            1. **SearchAgent** - Web search & content extraction
-            2. **SummarizerAgent** - Content analysis (BART model)
-            3. **VerifierAgent** - Quality verification 
-            4. **CoordinatorAgent** - Pipeline orchestration
+            **1. TransactionAgent**
+            Loads your CSV and categorizes each transaction (Marketing, Operations, Payroll, etc.)
             """)
-        
         with col2:
             st.markdown("""
-            **Features:**
-            - Multi-source web search (news, blogs, official sites)
-            - AI-powered content summarization
-            - PDF document support
-            - Source diversity and verification
-            - Local Hugging Face models (offline operation)
+            **2. SummarizerAgent**
+            Generates financial insights, answers your questions, and creates recommendations.
             """)
-        
-        st.subheader("System Status")
-        coordinator = get_coordinator()
-        if coordinator:
-            st.success("System initialized successfully")
-        else:
-            st.error("System initialization failed")
+        with col3:
+            st.markdown("""
+            **3. VerifierAgent**
+            Validates categorizations, detects anomalies, and flags unusual spending.
+            """)
+
 
 if __name__ == "__main__":
     try:
