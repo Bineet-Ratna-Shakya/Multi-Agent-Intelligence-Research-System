@@ -1,4 +1,4 @@
-# Streamlit UI - AI Bookkeeping Agent
+# Streamlit UI - AI Bookkeeping Agent (Conversational)
 
 import streamlit as st
 import json
@@ -10,227 +10,169 @@ from agents.coordinator_agent import CoordinatorAgent
 from utils.logger import setup_logger
 from config import DEFAULT_CSV_PATH
 
-st.set_page_config(
-    page_title="AI Bookkeeping Agent",
-    page_icon="$",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="AI Bookkeeping Agent", page_icon="$", layout="wide", initial_sidebar_state="expanded")
 
-if "initialized" not in st.session_state:
-    st.session_state.initialized = True
-    st.session_state.coordinator = None
+if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
-
-
-@st.cache_resource
-def setup_logging():
-    try:
-        os.makedirs("logs", exist_ok=True)
-        return setup_logger("WebApp", "logs/webapp.log")
-    except Exception as e:
-        st.error(f"Failed to setup logging: {e}")
-        return None
-
-
-logger = setup_logging()
+if "csv_path" not in st.session_state:
+    st.session_state.csv_path = DEFAULT_CSV_PATH
 
 
 @st.cache_resource
 def get_coordinator():
+    os.makedirs("reports", exist_ok=True)
+    os.makedirs("logs", exist_ok=True)
+    return CoordinatorAgent()
+
+
+def analyze(query: str, csv_path: str):
+    coordinator = get_coordinator()
+    task = {"query": query.strip(), "csv_path": csv_path}
+    return coordinator.execute(task)
+
+
+# ── Sidebar ──────────────────────────────────────────────────────
+
+with st.sidebar:
+    st.header("AI Bookkeeping Agent")
+
+    uploaded = st.file_uploader("Upload your CSV", type=["csv"],
+                                 help="Optional - uses demo data if empty")
+    if uploaded:
+        os.makedirs("data", exist_ok=True)
+        path = os.path.join("data", "uploaded.csv")
+        with open(path, "wb") as f:
+            f.write(uploaded.getvalue())
+        st.session_state.csv_path = path
+        st.success("CSV loaded!")
+
+    st.divider()
+    st.markdown("**Try asking:**")
+
+    suggestions = [
+        "What's my biggest expense category?",
+        "Show me income breakdown",
+        "What's my net profit?",
+        "How much on marketing?",
+        "Any unusual transactions?",
+        "Compare my expense categories",
+        "Show me spending trends",
+        "How many transactions do I have?",
+        "Tell me about payroll expenses",
+        "What's my largest single expense?",
+    ]
+    for s in suggestions:
+        if st.button(s, use_container_width=True, key=f"btn_{s}"):
+            st.session_state["pending_query"] = s
+
+    st.divider()
+    st.caption("Data Preview")
     try:
-        os.makedirs("reports", exist_ok=True)
-        return CoordinatorAgent()
-    except Exception as e:
-        st.error(f"Failed to initialize coordinator: {e}")
-        if logger:
-            logger.error(f"Failed to initialize coordinator: {e}")
-        return None
+        df = pd.read_csv(st.session_state.csv_path)
+        st.dataframe(df.head(8), use_container_width=True, height=250)
+    except Exception:
+        st.warning("Could not preview CSV")
+
+    if st.button("Clear Chat", use_container_width=True):
+        st.session_state.chat_history = []
+        st.rerun()
 
 
-def run_analysis(query, csv_path=None):
-    try:
-        coordinator = get_coordinator()
-        if not coordinator:
-            return False, "Failed to initialize the system"
+# ── Main Chat ────────────────────────────────────────────────────
 
-        task = {"query": query.strip()}
-        if csv_path:
-            task["csv_path"] = csv_path
+st.title("AI Bookkeeping Agent")
 
-        result = coordinator.execute(task)
+# Render chat history (without charts - just text)
+for msg in st.session_state.chat_history:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# Get query from chat input or sidebar button
+query = st.chat_input("Ask about your finances...")
+if "pending_query" in st.session_state:
+    query = st.session_state.pop("pending_query")
+
+if query:
+    # User message
+    st.session_state.chat_history.append({"role": "user", "content": query})
+    with st.chat_message("user"):
+        st.markdown(query)
+
+    # Assistant response
+    with st.chat_message("assistant"):
+        with st.spinner("Analyzing..."):
+            result = analyze(query, st.session_state.csv_path)
 
         if result["success"]:
-            return True, result
-        else:
-            return False, result.get("error", "Unknown error occurred")
+            report = result["report"]
+            insights = report.get("insights", [])
+            stats = report.get("financial_stats", {})
+            intent = report.get("intent", "overview")
 
-    except Exception as e:
-        error_msg = f"System error: {str(e)}"
-        if logger:
-            logger.error(f"Analysis failed: {error_msg}\n{traceback.format_exc()}")
-        return False, error_msg
+            # Build the text response
+            response_parts = []
 
+            for insight in insights:
+                answer = insight.get("answer", "")
+                detail = insight.get("detail", "")
+                title = insight.get("title", "")
 
-def main():
-    st.title("AI Bookkeeping Agent")
-    st.markdown("**Multi-agent financial intelligence system - Analyze your transactions with AI.**")
-    st.divider()
+                if insight.get("type") == "warnings":
+                    st.caption(f"Note: {answer}")
+                    continue
 
-    # Sidebar
-    with st.sidebar:
-        st.header("Configuration")
+                st.markdown(f"**{title}**")
+                st.markdown(answer)
+                response_parts.append(f"**{title}**: {answer}")
 
-        uploaded_file = st.file_uploader("Upload CSV (optional)", type=["csv"],
-                                          help="Upload your own transactions CSV or use the built-in demo data")
+                if detail:
+                    with st.expander("Details"):
+                        st.markdown(detail)
 
-        csv_path = DEFAULT_CSV_PATH
-        if uploaded_file is not None:
-            os.makedirs("data", exist_ok=True)
-            upload_path = os.path.join("data", "uploaded_transactions.csv")
-            with open(upload_path, "wb") as f:
-                f.write(uploaded_file.getvalue())
-            csv_path = upload_path
-            st.success("CSV uploaded!")
+                # Show chart if data exists
+                chart_data = insight.get("chart_data", {})
+                chart_type = insight.get("chart_type")
 
-        st.divider()
-
-        st.subheader("Quick Questions")
-        quick_queries = [
-            "What's my biggest expense category this month?",
-            "Show me my income breakdown",
-            "What's my net profit?",
-            "How much am I spending on marketing?",
-            "Give me a full financial overview"
-        ]
-
-        for q in quick_queries:
-            if st.button(q, use_container_width=True):
-                st.session_state["prefilled_query"] = q
-
-        st.divider()
-
-        # Show raw data preview
-        st.subheader("Data Preview")
-        try:
-            preview_df = pd.read_csv(csv_path)
-            st.dataframe(preview_df.head(10), use_container_width=True, height=300)
-        except Exception as e:
-            st.error(f"Could not load CSV: {e}")
-
-    # Main chat area
-    query = st.chat_input("Ask about your finances...")
-
-    # Check for prefilled query from sidebar
-    if "prefilled_query" in st.session_state:
-        query = st.session_state.pop("prefilled_query")
-
-    # Display chat history
-    for msg in st.session_state.chat_history:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-
-    if query:
-        # Show user message
-        st.session_state.chat_history.append({"role": "user", "content": query})
-        with st.chat_message("user"):
-            st.markdown(query)
-
-        # Process and show response
-        with st.chat_message("assistant"):
-            with st.spinner("Analyzing your transactions..."):
-                success, result_data = run_analysis(query, csv_path)
-
-            if success:
-                report = result_data["report"]
-                stats = result_data["stats"]
-                financial_stats = report.get("financial_stats", {})
-
-                # Metrics row
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Transactions", stats.get("transactions_loaded", 0))
-                with col2:
-                    st.metric("Total Income", f"${financial_stats.get('total_income', 0):,.2f}")
-                with col3:
-                    st.metric("Total Expenses", f"${financial_stats.get('total_expenses', 0):,.2f}")
-                with col4:
-                    net = financial_stats.get("net", 0)
-                    st.metric("Net Profit/Loss", f"${net:,.2f}",
-                              delta=f"{'Profit' if net > 0 else 'Loss'}")
-
-                st.divider()
-
-                # Show insights
-                insights = report.get("insights", [])
-                response_text = ""
-                for insight in insights:
-                    title = insight.get("title", "")
-                    summary = insight.get("summary", "")
-                    st.markdown(f"**{title}**")
-                    st.markdown(summary)
-                    st.markdown("")
-                    response_text += f"**{title}**: {summary}\n\n"
-
-                # Expense chart
-                expense_by_cat = financial_stats.get("expense_by_category", {})
-                if expense_by_cat:
-                    st.divider()
-                    st.markdown("**Expense Distribution**")
+                if chart_data and chart_type == "bar":
                     chart_df = pd.DataFrame(
-                        list(expense_by_cat.items()),
-                        columns=["Category", "Amount"]
-                    )
-                    st.bar_chart(chart_df.set_index("Category"))
+                        list(chart_data.items()), columns=["Category", "Amount"]
+                    ).set_index("Category")
+                    st.bar_chart(chart_df)
 
-                # Download button
-                st.divider()
-                report_json = json.dumps(report, indent=2)
-                st.download_button(
-                    "Download Full Report (JSON)",
-                    data=report_json,
-                    file_name=f"financial_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                    mime="application/json"
-                )
+                elif chart_data and chart_type == "comparison":
+                    chart_df = pd.DataFrame(
+                        list(chart_data.items()), columns=["Type", "Amount"]
+                    ).set_index("Type")
+                    st.bar_chart(chart_df)
 
-                st.session_state.chat_history.append({
-                    "role": "assistant",
-                    "content": response_text or "Analysis complete. See the charts and metrics above."
-                })
-            else:
-                error_msg = f"Analysis failed: {result_data}"
-                st.error(error_msg)
-                st.session_state.chat_history.append({"role": "assistant", "content": error_msg})
+                elif chart_data and chart_type == "line":
+                    chart_df = pd.DataFrame(
+                        list(chart_data.items()), columns=["Date", "Amount"]
+                    ).set_index("Date")
+                    st.line_chart(chart_df)
 
-    # Welcome screen when no query
-    if not query and not st.session_state.chat_history:
-        st.info("Ask a question about your finances using the chat input below, or click a quick question in the sidebar!")
+            # Download
+            report_json = json.dumps(report, indent=2, default=str)
+            st.download_button("Download Report", data=report_json,
+                               file_name=f"report_{datetime.now().strftime('%H%M%S')}.json",
+                               mime="application/json")
 
-        st.subheader("How It Works")
-        col1, col2, col3 = st.columns(3)
+            st.session_state.chat_history.append({
+                "role": "assistant",
+                "content": "\n\n".join(response_parts) if response_parts else "Analysis complete."
+            })
+        else:
+            err = f"Error: {result.get('error', 'Unknown')}"
+            st.error(err)
+            st.session_state.chat_history.append({"role": "assistant", "content": err})
 
-        with col1:
-            st.markdown("""
-            **1. TransactionAgent**
-            Loads your CSV and categorizes each transaction (Marketing, Operations, Payroll, etc.)
-            """)
-        with col2:
-            st.markdown("""
-            **2. SummarizerAgent**
-            Generates financial insights, answers your questions, and creates recommendations.
-            """)
-        with col3:
-            st.markdown("""
-            **3. VerifierAgent**
-            Validates categorizations, detects anomalies, and flags unusual spending.
-            """)
-
-
-if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        st.error(f"Application error: {str(e)}")
-        st.error("Please refresh the page and try again.")
-        if logger:
-            logger.error(f"Application error: {str(e)}\n{traceback.format_exc()}")
+# Welcome screen
+if not st.session_state.chat_history:
+    st.info("Ask a question about your finances, or click a suggestion in the sidebar.")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("**TransactionAgent**\n\nLoads & categorizes your transactions")
+    with col2:
+        st.markdown("**SummarizerAgent**\n\nAnswers your specific question")
+    with col3:
+        st.markdown("**VerifierAgent**\n\nValidates data & flags anomalies")
